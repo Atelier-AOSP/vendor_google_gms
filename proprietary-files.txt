@@ -84,6 +84,7 @@ product/etc/sysconfig/preinstalled-packages-glasses-core-pixel-common.xml
 product/priv-app/AndroidGlassesCoreStub/AndroidGlassesCoreStub.apk;PRESIGNED
 
 # Google Play
+product/apex/com.google.android.gmssystem.prodvic.apex:system/apex/com.google.android.gmssystem.prodvic.apex
 product/etc/security/fsverity/gms_fsverity_cert.der
 product/etc/security/fsverity/play_store_fsi_cert.der
 product/etc/sysconfig/allowed_apex_com.google.android.gmssystem.xml
