@@ -1,0 +1,25 @@
+# Android Auto
+product/priv-app/AndroidAutoStubPrebuilt/AndroidAutoStubPrebuilt.apk;PRESIGNED
+
+# Dialer
+product/etc/permissions/com.google.android.dialer.support.xml
+product/framework/com.google.android.dialer.support.jar
+product/priv-app/GoogleDialer/GoogleDialer.apk;OVERRIDES=Dialer;PRESIGNED
+
+# Dreamliner
+product/etc/permissions/com.google.android.apps.dreamliner.xml
+product/etc/sysconfig/dreamliner.xml
+product/priv-app/DreamlinerDreamsPrebuilt_100894/DreamlinerDreamsPrebuilt_100894.apk;PRESIGNED
+product/priv-app/DreamlinerPrebuilt_22000020/DreamlinerPrebuilt_22000020.apk;PRESIGNED
+product/priv-app/DreamlinerUpdater/DreamlinerUpdater.apk
+
+# Google Fi
+product/app/Tycho/Tycho.apk;PRESIGNED
+product/etc/sysconfig/google_fi.xml
+
+# Messages
+product/priv-app/PrebuiltBugle/PrebuiltBugle.apk;OVERRIDES=messaging;PRESIGNED
+
+# Safety
+product/etc/default-permissions/default-permissions-safetyhub.xml
+product/priv-app/SafetyHubPrebuilt/SafetyHubPrebuilt.apk;PRESIGNED
