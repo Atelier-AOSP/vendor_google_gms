@@ -5,6 +5,7 @@
 #
 
 import copy
+import json
 import os
 import re
 import subprocess
@@ -206,6 +207,23 @@ def merge_split_drawables(overlay_dir: Path):
             child.unlink()
 
 
+def inject_bp_target_packages(overlay_dir: Path):
+    android_ns = 'http://schemas.android.com/apk/res/android'
+    for meta in overlay_dir.glob('*/.overlay-meta.json'):
+        bp = meta.parent / 'Android.bp'
+        manifest = meta.parent / 'AndroidManifest.xml'
+        if not bp.is_file() or not manifest.is_file():
+            continue
+        target = json.loads(meta.read_text())['original_target_package']
+        overlay = ET.parse(manifest).getroot().find('overlay')
+        if overlay is None or overlay.get(f'{{{android_ns}}}targetPackage') == target:
+            continue
+        body = bp.read_text().rstrip()
+        if not body.endswith('}'):
+            continue
+        bp.write_text(f'{body[:-1].rstrip()}\n    target_package_name: "{target}",\n}}\n')
+
+
 def remove_meta_files(overlay_dir: Path):
     for f in overlay_dir.rglob('.overlay-meta.json'):
         f.unlink()
@@ -278,7 +296,8 @@ def main():
             continue
         if not (overlay_subdir / 'Android.bp').is_file():
             continue
-        _run(BEAUTIFY_RRO_PY, str(overlay_subdir))
+        _run(BEAUTIFY_RRO_PY, str(overlay_subdir), '--write-meta')
+    inject_bp_target_packages(overlay_dir)
     apply_text_substitutions(overlay_dir)
     remove_meta_files(overlay_dir)
     write_overlays_mk(overlay_dir)
