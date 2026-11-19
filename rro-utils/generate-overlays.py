@@ -239,6 +239,41 @@ def merge_split_drawables(overlay_dir: Path):
             child.unlink()
 
 
+def rename_mapped_resources(overlay_dir: Path):
+    # beautify_rro drops overlay values it can't find in the target, which
+    # includes renamed values a resourcesMap points at. Give them the target
+    # names and keep the map, so unmapped values stay inert as on stock.
+    android_ns = 'http://schemas.android.com/apk/res/android'
+    for manifest in overlay_dir.glob('*/AndroidManifest.xml'):
+        overlay = ET.parse(manifest).getroot().find('overlay')
+        if overlay is None:
+            continue
+        resources_map = overlay.get(f'{{{android_ns}}}resourcesMap', '')
+        if not resources_map.startswith('@xml/'):
+            continue
+        res_dir = manifest.parent / 'res'
+        map_file = res_dir / 'xml' / f'{resources_map[5:]}.xml'
+        renames = {}
+        for item in ET.parse(map_file).getroot().iter('item'):
+            target_type, _, target = item.get('target', '').partition('/')
+            value = item.get('value', '')
+            if value.startswith('@') and value[1:].partition('/')[0] == target_type:
+                old = value[1:].partition('/')[2]
+                if old != target:
+                    renames[(target_type, old)] = target
+        if not renames:
+            continue
+        for xml_file in [map_file, *res_dir.glob('values*/*.xml')]:
+            text = xml_file.read_text(encoding='utf-8')
+            new_text = text
+            for (res_type, old), new in renames.items():
+                new_text = new_text.replace(
+                    f'<{res_type} name="{old}"', f'<{res_type} name="{new}"'
+                ).replace(f'"@{res_type}/{old}"', f'"@{res_type}/{new}"')
+            if new_text != text:
+                xml_file.write_text(new_text, encoding='utf-8')
+
+
 def inject_bp_target_packages(overlay_dir: Path):
     android_ns = 'http://schemas.android.com/apk/res/android'
     for meta in overlay_dir.glob('*/.overlay-meta.json'):
@@ -333,6 +368,7 @@ def generate_rros(overlay_dir: Path, framework_path: Path, apk_backup: Path):
     delete_excluded_files(overlay_dir)
     rename_dollar_files(overlay_dir)
     apply_exclude_tags(overlay_dir)
+    rename_mapped_resources(overlay_dir)
     for overlay_subdir in sorted(overlay_dir.iterdir()):
         if not overlay_subdir.is_dir():
             continue
