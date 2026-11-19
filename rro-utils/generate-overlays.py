@@ -214,7 +214,8 @@ def merge_split_drawables(overlay_dir: Path):
         except ET.ParseError:
             return False
         folded = False
-        for xml_file in overlay_dir.rglob('*.xml'):
+        overlay = overlay_dir / child.relative_to(overlay_dir).parts[0]
+        for xml_file in overlay.rglob('*.xml'):
             if xml_file == child:
                 continue
             try:
