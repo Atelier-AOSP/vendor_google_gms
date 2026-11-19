@@ -68,24 +68,23 @@ def append_overlays_include():
 
 
 def run_generate_overlays(src: str):
-    if not GENERATE_OVERLAYS_PY.is_file() or not OVERLAY_DIR.is_dir():
+    if not OVERLAY_DIR.is_dir() or not any(OVERLAY_DIR.glob('*.apk')):
         return
     src_path = Path(src)
     dump_path = src_path if src_path.is_dir() else src_path.with_suffix('')
-    if not dump_path.is_dir():
-        return
     framework_path = dump_path / 'system' / 'framework' / 'framework-res.apk'
     if not framework_path.is_file():
-        return
-    subprocess.run(
+        sys.exit(f'error: cannot generate overlays, {framework_path} not found')
+    ret = subprocess.run(
         [
             str(GENERATE_OVERLAYS_PY),
             str(OVERLAY_DIR),
             '--framework-res', str(framework_path),
         ],
         cwd=REPO_ROOT,
-        check=False,
-    )
+    ).returncode
+    if ret != 0:
+        sys.exit(ret)
 
 
 def detect_source() -> str:

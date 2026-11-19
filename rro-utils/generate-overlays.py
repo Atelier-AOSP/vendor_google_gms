@@ -8,8 +8,10 @@ import copy
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from argparse import ArgumentParser
 from pathlib import Path
@@ -41,9 +43,38 @@ _EXCLUDED_FILENAMES = {
 }
 
 
+_FAILURE_MARKERS = ('Unknown package name',)
+
+
+def _fail(msg: str):
+    print(f'\033[0;31merror: {msg}\033[0m', file=sys.stderr)
+    sys.exit(1)
+
+
 def _run(script: Path, *args: str):
+    if not script.is_file():
+        _fail(f'{script} not found')
     env = {**os.environ, 'PYTHONPATH': str(_LINEAGE_SCRIPTS_DEV)}
-    subprocess.run([sys.executable, str(script), *args], env=env, check=False)
+    proc = subprocess.Popen(
+        [sys.executable, str(script), *args],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    # The lineage scripts exit 0 when they skip an overlay, so scan their output.
+    failures = []
+    for line in proc.stdout:
+        print(line, end='', flush=True)
+        if any(m in line for m in _FAILURE_MARKERS):
+            failures.append(line.strip())
+    if proc.wait() != 0:
+        _fail(f'{script.name} exited with {proc.returncode}')
+    if failures:
+        _fail(
+            f'{script.name} skipped {len(failures)} overlay(s):\n  '
+            + '\n  '.join(failures)
+        )
 
 
 def delete_excluded_files(overlay_dir: Path):
@@ -276,6 +307,18 @@ def main():
     if not any(overlay_dir.glob('*.apk')):
         return
 
+    with tempfile.TemporaryDirectory() as tmp:
+        apk_backup = Path(tmp)
+        try:
+            generate_rros(overlay_dir, framework_path, apk_backup)
+        except BaseException:
+            for apk in apk_backup.glob('*.apk'):
+                shutil.move(apk, overlay_dir)
+            print(f'Restored overlay APKs in {overlay_dir}', file=sys.stderr)
+            raise
+
+
+def generate_rros(overlay_dir: Path, framework_path: Path, apk_backup: Path):
     _run(
         GENERATE_RRO_PY,
         str(overlay_dir),
@@ -283,7 +326,7 @@ def main():
         '--framework', str(framework_path),
     )
     for apk in overlay_dir.glob('*.apk'):
-        apk.unlink()
+        shutil.move(apk, apk_backup)
 
     merge_split_drawables(overlay_dir)
     delete_excluded_files(overlay_dir)
