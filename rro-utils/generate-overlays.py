@@ -19,6 +19,7 @@ from pathlib import Path
 _LINEAGE_SCRIPTS_DEV = Path(__file__).resolve().parents[4] / 'lineage' / 'scripts' / 'dev'
 GENERATE_RRO_PY = _LINEAGE_SCRIPTS_DEV / 'generate_rro.py'
 BEAUTIFY_RRO_PY = _LINEAGE_SCRIPTS_DEV / 'beautify_rro.py'
+GENERATE_PACKAGE_MAP_PY = _LINEAGE_SCRIPTS_DEV / 'generate_package_map.py'
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 EXCLUDE_TAGS_FILE = _SCRIPT_DIR / 'exclude-tag.txt'
@@ -51,12 +52,26 @@ def _fail(msg: str):
     sys.exit(1)
 
 
-def _run(script: Path, *args: str):
+def _lineage_cmd(script: Path, *args: str):
     if not script.is_file():
         _fail(f'{script} not found')
     env = {**os.environ, 'PYTHONPATH': str(_LINEAGE_SCRIPTS_DEV)}
+    return [sys.executable, str(script), *args], env
+
+
+def _generate_package_map(map_path: Path):
+    cmd, env = _lineage_cmd(GENERATE_PACKAGE_MAP_PY, str(map_path))
+    proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    # Indexing the tree warns about unrelated blueprints; show that only on failure.
+    if proc.returncode != 0:
+        print(proc.stdout + proc.stderr, end='', file=sys.stderr)
+        _fail(f'{GENERATE_PACKAGE_MAP_PY.name} exited with {proc.returncode}')
+
+
+def _run(script: Path, *args: str):
+    cmd, env = _lineage_cmd(script, *args)
     proc = subprocess.Popen(
-        [sys.executable, str(script), *args],
+        cmd,
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -355,11 +370,16 @@ def main():
 
 
 def generate_rros(overlay_dir: Path, framework_path: Path, apk_backup: Path):
+    # Every lineage script call would otherwise index the whole tree again.
+    package_map = apk_backup / 'package-map.json'
+    _generate_package_map(package_map)
+
     _run(
         GENERATE_RRO_PY,
         str(overlay_dir),
         '--overlays', str(overlay_dir),
         '--framework', str(framework_path),
+        '--package-map', str(package_map),
     )
     for apk in overlay_dir.glob('*.apk'):
         shutil.move(apk, apk_backup)
@@ -376,7 +396,12 @@ def generate_rros(overlay_dir: Path, framework_path: Path, apk_backup: Path):
             continue
         if not (overlay_subdir / 'Android.bp').is_file():
             continue
-        _run(BEAUTIFY_RRO_PY, str(overlay_subdir), '--write-meta')
+        _run(
+            BEAUTIFY_RRO_PY,
+            str(overlay_subdir),
+            '--write-meta',
+            '--package-map', str(package_map),
+        )
     inject_bp_target_packages(overlay_dir)
     apply_text_substitutions(overlay_dir)
     remove_meta_files(overlay_dir)
